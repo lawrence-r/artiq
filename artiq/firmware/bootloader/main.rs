@@ -10,7 +10,9 @@ extern crate board_misoc;
 use core::{ptr, slice};
 use crc::crc32;
 use byteorder::{ByteOrder, BigEndian};
-use board_misoc::{ident, cache, sdram, config, boot, mem as board_mem};
+use board_misoc::{ident, cache, config, boot, mem as board_mem};
+#[cfg(has_dfii)]
+use board_misoc::sdram;
 #[cfg(has_slave_fpga_cfg)]
 use board_misoc::slave_fpga;
 #[cfg(has_ethmac)]
@@ -52,6 +54,7 @@ fn memory_test(total: &mut usize, wrong: &mut usize) -> bool {
             }
 
             cache::flush_cpu_dcache();
+            #[cfg(has_dfii)]
             cache::flush_l2_cache();
 
             $prepare;
@@ -92,13 +95,16 @@ fn startup() -> bool {
 
     println!("Gateware ident {}", ident::read(&mut [0; 64]));
 
-    println!("Initializing SDRAM...");
 
+    #[cfg(has_dfii)]
+    {
+    println!("Initializing SDRAM...");
     if unsafe { sdram::init(Some(&mut Console)) } {
         println!("SDRAM initialized");
     } else {
         println!("SDRAM initialization failed");
         return false
+    }
     }
 
     let (mut total, mut wrong) = (0, 0);

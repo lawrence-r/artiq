@@ -380,6 +380,7 @@ fn process_kern_message(io: &Io, aux_mutex: &Mutex,
             }
             &kern::DmaRecordStop { duration } => {
                 session.congress.dma_manager.record_stop(duration);
+                #[cfg(has_dfii)]
                 cache::flush_l2_cache();
                 kern_acknowledge()
             }

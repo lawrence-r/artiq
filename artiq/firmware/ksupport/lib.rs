@@ -257,6 +257,7 @@ fn dma_record_flush() {
     }
 }
 
+#[cfg(has_rtio_dma)]
 #[unwind(allowed)]
 extern fn dma_record_start(name: CSlice<u8>) {
     let name = str::from_utf8(name.as_ref()).unwrap();
@@ -277,6 +278,7 @@ extern fn dma_record_start(name: CSlice<u8>) {
     }
 }
 
+#[cfg(has_rtio_dma)]
 #[unwind(allowed)]
 extern fn dma_record_stop(duration: i64) {
     unsafe {
@@ -336,6 +338,7 @@ unsafe fn dma_record_output_prepare(timestamp: i64, target: i32,
     data
 }
 
+#[cfg(has_rtio_dma)]
 #[unwind(aborts)]
 extern fn dma_record_output(target: i32, word: i32) {
     unsafe {
@@ -350,6 +353,7 @@ extern fn dma_record_output(target: i32, word: i32) {
     }
 }
 
+#[cfg(has_rtio_dma)]
 #[unwind(aborts)]
 extern fn dma_record_output_wide(target: i32, words: CSlice<i32>) {
     assert!(words.len() <= 16); // enforce the hardware limit

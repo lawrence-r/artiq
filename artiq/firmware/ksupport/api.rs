@@ -107,10 +107,15 @@ static mut API: &'static [(&'static str, *const ())] = &[
     api!(rtio_input_data = ::rtio::input_data),
     api!(rtio_input_timestamped_data = ::rtio::input_timestamped_data),
 
+    #[cfg(has_rtio_dma)]
     api!(dma_record_start = ::dma_record_start),
+    #[cfg(has_rtio_dma)]
     api!(dma_record_stop = ::dma_record_stop),
+    #[cfg(has_rtio_dma)]
     api!(dma_erase = ::dma_erase),
+    #[cfg(has_rtio_dma)]
     api!(dma_retrieve = ::dma_retrieve),
+    #[cfg(has_rtio_dma)]
     api!(dma_playback = ::dma_playback),
 
     api!(i2c_start = ::nrt_bus::i2c::start),
