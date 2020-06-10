@@ -25,6 +25,7 @@ extern crate board_misoc;
 extern crate board_artiq;
 extern crate logger_artiq;
 extern crate proto_artiq;
+extern crate riverlane;
 
 use core::cell::RefCell;
 use core::convert::TryFrom;
@@ -40,6 +41,8 @@ use board_artiq::{mailbox, rpc_queue};
 use proto_artiq::{mgmt_proto, moninj_proto, rpc_proto, session_proto, kernel_proto};
 #[cfg(has_rtio_analyzer)]
 use proto_artiq::analyzer_proto;
+#[cfg(has_rabi)]
+use riverlane::rabi; 
 
 mod rtio_clocking;
 mod rtio_mgt;
@@ -95,6 +98,9 @@ fn startup() {
     info!("ARTIQ runtime starting...");
     info!("software ident {}", csr::CONFIG_IDENTIFIER_STR);
     info!("gateware ident {}", ident::read(&mut [0; 64]));
+
+    #[cfg[has_rabi]]
+    info!("Riverlane: Rabi block - first command retrieved is: {:x}", rabi::get_next_cmd()); 
 
     setup_log_levels();
     #[cfg(has_i2c)]

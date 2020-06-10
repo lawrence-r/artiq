@@ -1,0 +1,17 @@
+[package]
+authors = ["Riverlane"]
+name = "riverlane"
+version = "0.0.0"
+build = "build.rs"
+
+[build-dependencies]
+build_misoc = { path = "../libbuild_misoc" }
+
+[lib]
+name = "riverlane"
+path = "lib.rs"
+
+[dependencies]
+board_misoc = { path = "../libboard_misoc" }
+
+[features]

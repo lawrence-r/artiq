@@ -192,6 +192,14 @@ version = "0.3.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
+name = "riverlane"
+version = "0.0.0"
+dependencies = [
+ "board_misoc 0.0.0",
+ "build_misoc 0.0.0",
+]
+
+[[package]]
 name = "runtime"
 version = "0.0.0"
 dependencies = [
@@ -210,6 +218,7 @@ dependencies = [
  "logger_artiq 0.0.0",
  "managed 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "proto_artiq 0.0.0",
+ "riverlane 0.0.0",
  "smoltcp 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "unwind_backtrace 0.0.0",
 ]
