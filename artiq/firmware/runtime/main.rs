@@ -72,6 +72,7 @@ fn grabber_thread(io: sched::Io) {
 }
 
 fn setup_log_levels() {
+    info!("about to read_str log_level -> ");
     match config::read_str("log_level", |r| r.map(|s| s.parse())) {
         Ok(Ok(log_level_filter)) => {
             info!("log level set to {} by `log_level` config key",
@@ -98,9 +99,6 @@ fn startup() {
     info!("ARTIQ runtime starting...");
     info!("software ident {}", csr::CONFIG_IDENTIFIER_STR);
     info!("gateware ident {}", ident::read(&mut [0; 64]));
-
-    #[cfg[has_rabi]]
-    info!("Riverlane: Rabi block - first command retrieved is: {:x}", rabi::get_next_cmd()); 
 
     setup_log_levels();
     #[cfg(has_i2c)]
@@ -168,7 +166,7 @@ fn startup() {
                        .finalize()
         }
     };
-
+    
     #[cfg(has_drtio)]
     let drtio_routing_table = urc::Urc::new(RefCell::new(
         drtio_routing::config_routing_table(csr::DRTIO.len())));
@@ -180,7 +178,7 @@ fn startup() {
     #[cfg(has_drtio_routing)]
     drtio_routing::interconnect_disable_all();
     let aux_mutex = sched::Mutex::new();
-
+    
     let mut scheduler = sched::Scheduler::new();
     let io = scheduler.io();
 
@@ -192,7 +190,9 @@ fn startup() {
         let drtio_routing_table = drtio_routing_table.clone();
         let up_destinations = up_destinations.clone();
         io.spawn(16384, move |io| { session::thread(io, &aux_mutex, &drtio_routing_table, &up_destinations) });
+        print!("session completed");
     }
+
     #[cfg(any(has_rtio_moninj, has_drtio))]
     {
         let aux_mutex = aux_mutex.clone();
@@ -204,7 +204,24 @@ fn startup() {
 
     #[cfg(has_grabber)]
     io.spawn(4096, grabber_thread);
+   
+    
+    #[cfg(has_rabi)]
+    {
+        use core::ptr::{read_volatile, write_volatile};
+        while let Some(cmd) = rabi::get_next_cmd() {
+            info!("Riverlane: Rabi block - new command retrieved is: {:x}", cmd);
+            let retv = rabi::send_cmd_to_rtio(cmd);
+            info!("Riverlane: Rabi block - command was sent to RTIO!");
+            if (retv != 0){
+                info!("Riverlane: Rabi block - RTIO returned {:x} that indicates {}", retv, rabi::process_exceptional_status(retv));
+            }
 
+        }  
+    }
+
+
+    info!("Setting up the EthernetStatics");
     let mut net_stats = ethmac::EthernetStatistics::new();
     loop {
         scheduler.run();

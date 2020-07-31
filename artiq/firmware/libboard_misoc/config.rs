@@ -36,6 +36,7 @@ impl fmt::Display for Error {
 mod imp {
     use core::str;
     use byteorder::{ByteOrder, BigEndian};
+    #[cfg(l2_size)] 
     use cache;
     use spiflash;
     use super::Error;
@@ -129,14 +130,15 @@ mod imp {
                 // error!("offset {}: truncated record", self.offset);
                 return Some(Err(Error::Truncated { offset: self.offset }))
             }
-
+            
             let record_size = BigEndian::read_u32(data) as usize;
+            
             if record_size == !0 /* all ones; erased flash */ {
                 return None
             } else if record_size < 4 || record_size > data.len() {
                 return Some(Err(Error::InvalidSize { offset: self.offset, size: record_size }))
             }
-
+            
             let record_body = &data[4..record_size];
             match record_body.iter().position(|&x| x == 0) {
                 None => {
@@ -156,6 +158,7 @@ mod imp {
         f(Lock::take().and_then(|lock| {
             let mut iter = Iter::new(lock.data());
             let mut value = &[][..];
+            
             while let Some(result) = iter.next() {
                 let (record_key, record_value) = result?;
                 if key.as_bytes() == record_key {
@@ -193,6 +196,7 @@ mod imp {
             write(key);
             write(&[0]);
             write(value);
+            #[cfg(l2_size)] 
             cache::flush_l2_cache();
         }
 
@@ -279,6 +283,7 @@ mod imp {
         let data = lock.data();
 
         unsafe { spiflash::erase_sector(data.as_ptr() as usize) };
+        #[cfg(l2_size)]
         cache::flush_l2_cache();
 
         Ok(())
