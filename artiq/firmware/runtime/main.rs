@@ -137,7 +137,6 @@ fn startup() {
         smoltcp::phy::EthernetTracer::new(net_device, net_trace_fn)
     };
 
-    info!("Net_device completed");
     let neighbor_cache =
         smoltcp::iface::NeighborCache::new(alloc::btree_map::BTreeMap::new());
     let net_addresses = net_settings::get_adresses();
