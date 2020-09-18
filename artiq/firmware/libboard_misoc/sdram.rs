@@ -445,7 +445,7 @@ use sdram_phy;
 pub unsafe fn init(mut _logger: Option<&mut fmt::Write>) -> bool {
     sdram_phy::initialize();
 
-    #[cfg(has_ddrphy)]
+    #[cfg(all(has_ddrphy, not(has_emulator)))]
     {
         #[cfg(kusddrphy)]
         csr::ddrphy::en_vtc_write(0);

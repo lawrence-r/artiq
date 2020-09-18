@@ -30,7 +30,6 @@ extern crate riverlane;
 use core::cell::RefCell;
 use core::convert::TryFrom;
 use smoltcp::wire::IpCidr;
-
 use board_misoc::{csr, irq, ident, clock, boot, config, net_settings};
 #[cfg(has_ethmac)]
 use board_misoc::ethmac;
@@ -72,7 +71,7 @@ fn grabber_thread(io: sched::Io) {
 }
 
 fn setup_log_levels() {
-    info!("about to read_str log_level -> ");
+    println!("about to read_str log_level -> ");
     match config::read_str("log_level", |r| r.map(|s| s.parse())) {
         Ok(Ok(log_level_filter)) => {
             info!("log level set to {} by `log_level` config key",
@@ -101,6 +100,7 @@ fn startup() {
     info!("gateware ident {}", ident::read(&mut [0; 64]));
 
     setup_log_levels();
+ 
     #[cfg(has_i2c)]
     board_misoc::i2c::init().expect("I2C initialization failed");
     #[cfg(all(soc_platform = "kasli", hw_rev = "v2.0"))]
@@ -112,9 +112,13 @@ fn startup() {
         io_expander0.init().expect("I2C I/O expander #0 initialization failed");
         io_expander1.init().expect("I2C I/O expander #1 initialization failed");
     }
+    info!("rtio_clocking!");
     rtio_clocking::init();
 
+
+    info!("net_device!");
     let mut net_device = unsafe { ethmac::EthernetDevice::new() };
+    #[cfg(not(has_emulator))]
     net_device.reset_phy_if_any();
 
     let net_device = {
@@ -136,6 +140,7 @@ fn startup() {
         }
         smoltcp::phy::EthernetTracer::new(net_device, net_trace_fn)
     };
+    info!("net_device: done!");
 
     let neighbor_cache =
         smoltcp::iface::NeighborCache::new(alloc::btree_map::BTreeMap::new());
@@ -186,11 +191,12 @@ fn startup() {
 
     io.spawn(4096, mgmt::thread);
     {
+        println!("about to start session");
         let aux_mutex = aux_mutex.clone();
         let drtio_routing_table = drtio_routing_table.clone();
         let up_destinations = up_destinations.clone();
         io.spawn(16384, move |io| { session::thread(io, &aux_mutex, &drtio_routing_table, &up_destinations) });
-        print!("session completed");
+        println!("session completed");
     }
 
     #[cfg(any(has_rtio_moninj, has_drtio))]
@@ -204,8 +210,9 @@ fn startup() {
 
     #[cfg(has_grabber)]
     io.spawn(4096, grabber_thread);
-   
-    
+
+
+    /*
     #[cfg(has_rabi)]
     {
         use core::ptr::{read_volatile, write_volatile};
@@ -219,17 +226,19 @@ fn startup() {
 
         }  
     }
-
-
-    info!("Setting up the EthernetStatics");
+ */
+    println!("Setting up the EthernetStatics");
     let mut net_stats = ethmac::EthernetStatistics::new();
     loop {
+        // This is the important call to the scheduler!
         scheduler.run();
 
+        /*
         {
             let sockets = &mut *scheduler.sockets().borrow_mut();
             loop {
                 let timestamp = smoltcp::time::Instant::from_millis(clock::get_ms() as i64);
+                
                 match interface.poll(sockets, timestamp) {
                     Ok(true) => (),
                     Ok(false) => break,
@@ -248,12 +257,14 @@ fn startup() {
             io_expander0.service().expect("I2C I/O expander #0 service failed");
             io_expander1.service().expect("I2C I/O expander #1 service failed");
         }
+        */
     }
+
 }
 
 #[global_allocator]
 static mut ALLOC: alloc_list::ListAlloc = alloc_list::EMPTY;
-static mut LOG_BUFFER: [u8; 1<<17] = [0; 1<<17];
+static mut LOG_BUFFER: [u8; 1<<9] = [0; 1<<9];
 
 #[no_mangle]
 pub extern fn main() -> i32 {

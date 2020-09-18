@@ -19,6 +19,8 @@ use board_misoc::slave_fpga;
 use board_misoc::{clock, ethmac, net_settings};
 use board_misoc::uart_console::Console;
 
+use core::fmt;
+
 #[cfg(not(has_emulator))]
 fn check_integrity() -> bool {
     extern {
@@ -206,11 +208,15 @@ fn flash_boot() {
     }
 }
 
+
+
 #[cfg(has_emulator)]
 fn flash_boot(){
-    println!("Flash boot - RAM has been preloaded with the firmware. We skip all the initialization and jump into main");
-    const MAIN_RAM: *mut u8 = (board_mem::MAIN_RAM_BASE + 0x1034) as *mut u8;
-    unsafe { boot::jump(MAIN_RAM as usize) }
+    unsafe {
+        println!("Flash boot (Emulator mode) - RAM has been preloaded with the firmware. We skip all the initialization and jump into main");
+        let MAIN_RAM_WITH_JUMP: *mut u8 =  board_misoc::csr::CONFIG_SECOND_STAGE_OFFSET as *mut u8;
+        boot::jump(MAIN_RAM_WITH_JUMP as usize)
+    }
 }
 
 #[cfg(has_ethmac)]

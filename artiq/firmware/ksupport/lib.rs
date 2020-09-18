@@ -100,6 +100,7 @@ mod eh_artiq;
 mod api;
 mod rtio;
 mod nrt_bus;
+mod rabi;
 
 static mut LIBRARY: Option<Library<'static>> = None;
 

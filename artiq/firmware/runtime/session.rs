@@ -206,10 +206,12 @@ unsafe fn kern_load(io: &Io, session: &mut Session, library: &[u8])
     if session.running() {
         unexpected!("attempted to load a new kernel while a kernel was running")
     }
-
+    info!("kern_load: kernel::start");
     kernel::start();
+    info!("kern_load: kernel::start completed");
 
     kern_send(io, &kern::LoadRequest(&library))?;
+    info!("kern_load: kernel_send completed");
     kern_recv(io, |reply| {
         match reply {
             kern::LoadReply(Ok(())) => {
@@ -550,12 +552,15 @@ fn flash_kernel_worker(io: &Io, aux_mutex: &Mutex,
             Ok(kernel) if kernel.len() > 0 => unsafe {
                 // kernel CPU cannot access the SPI flash address space directly,
                 // so make a copy.
+                info!("kernel found: loading... "); 
                 kern_load(io, &mut session, Vec::from(kernel).as_ref())
             },
             _ => Err(Error::KernelNotFound)
         }
     })?;
+    info!("kernel found: starting..."); 
     kern_run(&mut session)?;
+    info!("post-kernel run"); 
 
     loop {
         if !rpc_queue::empty() {
@@ -582,6 +587,7 @@ fn flash_kernel_worker(io: &Io, aux_mutex: &Mutex,
 
 fn respawn<F>(io: &Io, handle: &mut Option<ThreadHandle>, f: F)
         where F: 'static + FnOnce(Io) + Send {
+    println!("I'm here!");
     match handle.take() {
         None => (),
         Some(handle) => {
@@ -591,34 +597,40 @@ fn respawn<F>(io: &Io, handle: &mut Option<ThreadHandle>, f: F)
             }
         }
     }
-
+    println!("I'm here 2!");
     *handle = Some(io.spawn(16384, f))
 }
 
 pub fn thread(io: Io, aux_mutex: &Mutex,
         routing_table: &Urc<RefCell<drtio_routing::RoutingTable>>,
         up_destinations: &Urc<RefCell<[bool; drtio_routing::DEST_COUNT]>>) {
-    let listener = TcpListener::new(&io, 65535);
-    listener.listen(1381).expect("session: cannot listen");
-    info!("accepting network sessions");
+    println!("thread: starting!");
+    
+    //let listener = TcpListener::new(&io, 65535);
+    //println!("TcpListener: new!");
+    //listener.listen(1381).expect("session: cannot listen");
+    //println!("accepting network sessions");
 
     let congress = Urc::new(RefCell::new(Congress::new()));
 
     let mut kernel_thread = None;
     {
+        println!("Preparing to start section...");
         let aux_mutex = aux_mutex.clone();
         let routing_table = routing_table.clone();
         let up_destinations = up_destinations.clone();
         let congress = congress.clone();
+        println!("About to start respawn...");
         respawn(&io, &mut kernel_thread, move |io| {
+            println!("Entering respawn!");
             let routing_table = routing_table.borrow();
             let mut congress = congress.borrow_mut();
-            info!("running startup kernel");
+            println!("running startup kernel");
             match flash_kernel_worker(&io, &aux_mutex, &routing_table, &up_destinations, &mut congress, "startup_kernel") {
                 Ok(()) =>
-                    info!("startup kernel finished"),
+                println!("startup kernel finished"),
                 Err(Error::KernelNotFound) =>
-                    info!("no startup kernel found"),
+                    println!("no startup kernel found"),
                 Err(err) => {
                     congress.finished_cleanly.set(false);
                     error!("startup kernel aborted: {}", err);
@@ -626,8 +638,10 @@ pub fn thread(io: Io, aux_mutex: &Mutex,
             }
         })
     }
+    println!("End of the start section...");
 
     loop {
+        /*
         if listener.can_accept() {
             let mut stream = listener.accept().expect("session: cannot accept");
             stream.set_timeout(Some(2250));
@@ -665,8 +679,9 @@ pub fn thread(io: Io, aux_mutex: &Mutex,
                     }
                 }
             });
+        
         }
-
+        */
         if kernel_thread.as_ref().map_or(true, |h| h.terminated()) {
             info!("no connection, starting idle kernel");
 
