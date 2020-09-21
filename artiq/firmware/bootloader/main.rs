@@ -19,8 +19,6 @@ use board_misoc::slave_fpga;
 use board_misoc::{clock, ethmac, net_settings};
 use board_misoc::uart_console::Console;
 
-use core::fmt;
-
 #[cfg(not(has_emulator))]
 fn check_integrity() -> bool {
     extern {
