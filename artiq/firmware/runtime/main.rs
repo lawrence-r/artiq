@@ -212,7 +212,6 @@ fn startup() {
     io.spawn(4096, grabber_thread);
 
 
-    /*
     #[cfg(has_rabi)]
     {
         use core::ptr::{read_volatile, write_volatile};
@@ -226,7 +225,6 @@ fn startup() {
 
         }  
     }
- */
     println!("Setting up the EthernetStatics");
     let mut net_stats = ethmac::EthernetStatistics::new();
     loop {
