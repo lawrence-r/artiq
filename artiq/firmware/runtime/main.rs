@@ -112,66 +112,66 @@ fn startup() {
         io_expander0.init().expect("I2C I/O expander #0 initialization failed");
         io_expander1.init().expect("I2C I/O expander #1 initialization failed");
     }
-    info!("rtio_clocking!");
     rtio_clocking::init();
 
-
-    info!("net_device!");
     let mut net_device = unsafe { ethmac::EthernetDevice::new() };
+    #[cfg(has_emulator)]
+    {
+        info!("Emulator: skipping network setup.");
+    }
     #[cfg(not(has_emulator))]
-    net_device.reset_phy_if_any();
+    {
+        net_device.reset_phy_if_any();
+        let net_device = {
+            use smoltcp::time::Instant;
+            use smoltcp::wire::PrettyPrinter;
+            use smoltcp::wire::EthernetFrame;
 
-    let net_device = {
-        use smoltcp::time::Instant;
-        use smoltcp::wire::PrettyPrinter;
-        use smoltcp::wire::EthernetFrame;
+            fn net_trace_writer(timestamp: Instant, printer: PrettyPrinter<EthernetFrame<&[u8]>>) {
+                print!("\x1b[37m[{:6}.{:03}s]\n{}\x1b[0m\n",
+                    timestamp.secs(), timestamp.millis(), printer)
+            }
 
-        fn net_trace_writer(timestamp: Instant, printer: PrettyPrinter<EthernetFrame<&[u8]>>) {
-            print!("\x1b[37m[{:6}.{:03}s]\n{}\x1b[0m\n",
-                   timestamp.secs(), timestamp.millis(), printer)
-        }
+            fn net_trace_silent(_timestamp: Instant, _printer: PrettyPrinter<EthernetFrame<&[u8]>>) {}
 
-        fn net_trace_silent(_timestamp: Instant, _printer: PrettyPrinter<EthernetFrame<&[u8]>>) {}
+            let net_trace_fn: fn(Instant, PrettyPrinter<EthernetFrame<&[u8]>>);
+            match config::read_str("net_trace", |r| r.map(|s| s == "1")) {
+                Ok(true) => net_trace_fn = net_trace_writer,
+                _ => net_trace_fn = net_trace_silent
+            }
+            smoltcp::phy::EthernetTracer::new(net_device, net_trace_fn)
+        };
 
-        let net_trace_fn: fn(Instant, PrettyPrinter<EthernetFrame<&[u8]>>);
-        match config::read_str("net_trace", |r| r.map(|s| s == "1")) {
-            Ok(true) => net_trace_fn = net_trace_writer,
-            _ => net_trace_fn = net_trace_silent
-        }
-        smoltcp::phy::EthernetTracer::new(net_device, net_trace_fn)
-    };
-    info!("net_device: done!");
-
-    let neighbor_cache =
-        smoltcp::iface::NeighborCache::new(alloc::btree_map::BTreeMap::new());
-    let net_addresses = net_settings::get_adresses();
-    info!("network addresses: {}", net_addresses);
-    let mut interface = match net_addresses.ipv6_addr {
-        Some(addr) => {
-            let ip_addrs = [
-                IpCidr::new(net_addresses.ipv4_addr, 0),
-                IpCidr::new(net_addresses.ipv6_ll_addr, 0),
-                IpCidr::new(addr, 0)
-            ];
-            smoltcp::iface::EthernetInterfaceBuilder::new(net_device)
-                       .ethernet_addr(net_addresses.hardware_addr)
-                       .ip_addrs(ip_addrs)
-                       .neighbor_cache(neighbor_cache)
-                       .finalize()
-        }
-        None => {
-            let ip_addrs = [
-                IpCidr::new(net_addresses.ipv4_addr, 0),
-                IpCidr::new(net_addresses.ipv6_ll_addr, 0)
-            ];
-            smoltcp::iface::EthernetInterfaceBuilder::new(net_device)
-                       .ethernet_addr(net_addresses.hardware_addr)
-                       .ip_addrs(ip_addrs)
-                       .neighbor_cache(neighbor_cache)
-                       .finalize()
-        }
-    };
-    
+        let neighbor_cache =
+            smoltcp::iface::NeighborCache::new(alloc::btree_map::BTreeMap::new());
+        let net_addresses = net_settings::get_adresses();
+        info!("network addresses: {}", net_addresses);
+        let mut interface = match net_addresses.ipv6_addr {
+            Some(addr) => {
+                let ip_addrs = [
+                    IpCidr::new(net_addresses.ipv4_addr, 0),
+                    IpCidr::new(net_addresses.ipv6_ll_addr, 0),
+                    IpCidr::new(addr, 0)
+                ];
+                smoltcp::iface::EthernetInterfaceBuilder::new(net_device)
+                        .ethernet_addr(net_addresses.hardware_addr)
+                        .ip_addrs(ip_addrs)
+                        .neighbor_cache(neighbor_cache)
+                        .finalize()
+            }
+            None => {
+                let ip_addrs = [
+                    IpCidr::new(net_addresses.ipv4_addr, 0),
+                    IpCidr::new(net_addresses.ipv6_ll_addr, 0)
+                ];
+                smoltcp::iface::EthernetInterfaceBuilder::new(net_device)
+                        .ethernet_addr(net_addresses.hardware_addr)
+                        .ip_addrs(ip_addrs)
+                        .neighbor_cache(neighbor_cache)
+                        .finalize()
+            }
+        };
+    }
     #[cfg(has_drtio)]
     let drtio_routing_table = urc::Urc::new(RefCell::new(
         drtio_routing::config_routing_table(csr::DRTIO.len())));
@@ -191,12 +191,12 @@ fn startup() {
 
     io.spawn(4096, mgmt::thread);
     {
-        println!("about to start session");
+        info!("about to start session");
         let aux_mutex = aux_mutex.clone();
         let drtio_routing_table = drtio_routing_table.clone();
         let up_destinations = up_destinations.clone();
         io.spawn(16384, move |io| { session::thread(io, &aux_mutex, &drtio_routing_table, &up_destinations) });
-        println!("session completed");
+        info!("session completed");
     }
 
     #[cfg(any(has_rtio_moninj, has_drtio))]
@@ -231,7 +231,7 @@ fn startup() {
         // This is the important call to the scheduler!
         scheduler.run();
 
-        /*
+        #[cfg(not(has_emulator))]
         {
             let sockets = &mut *scheduler.sockets().borrow_mut();
             loop {
@@ -255,7 +255,7 @@ fn startup() {
             io_expander0.service().expect("I2C I/O expander #0 service failed");
             io_expander1.service().expect("I2C I/O expander #1 service failed");
         }
-        */
+        
     }
 
 }

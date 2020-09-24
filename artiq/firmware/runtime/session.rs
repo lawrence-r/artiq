@@ -587,7 +587,6 @@ fn flash_kernel_worker(io: &Io, aux_mutex: &Mutex,
 
 fn respawn<F>(io: &Io, handle: &mut Option<ThreadHandle>, f: F)
         where F: 'static + FnOnce(Io) + Send {
-    println!("I'm here!");
     match handle.take() {
         None => (),
         Some(handle) => {
@@ -597,7 +596,6 @@ fn respawn<F>(io: &Io, handle: &mut Option<ThreadHandle>, f: F)
             }
         }
     }
-    println!("I'm here 2!");
     *handle = Some(io.spawn(16384, f))
 }
 
@@ -605,22 +603,21 @@ pub fn thread(io: Io, aux_mutex: &Mutex,
         routing_table: &Urc<RefCell<drtio_routing::RoutingTable>>,
         up_destinations: &Urc<RefCell<[bool; drtio_routing::DEST_COUNT]>>) {
     println!("thread: starting!");
-    
-    //let listener = TcpListener::new(&io, 65535);
-    //println!("TcpListener: new!");
-    //listener.listen(1381).expect("session: cannot listen");
-    //println!("accepting network sessions");
-
+   
+    #[cfg(not(has_emulator))]{ 
+        let listener = TcpListener::new(&io, 65535);
+        println!("TcpListener: new!");
+        listener.listen(1381).expect("session: cannot listen");
+        println!("accepting network sessions");
+    }
     let congress = Urc::new(RefCell::new(Congress::new()));
 
     let mut kernel_thread = None;
     {
-        println!("Preparing to start section...");
         let aux_mutex = aux_mutex.clone();
         let routing_table = routing_table.clone();
         let up_destinations = up_destinations.clone();
         let congress = congress.clone();
-        println!("About to start respawn...");
         respawn(&io, &mut kernel_thread, move |io| {
             println!("Entering respawn!");
             let routing_table = routing_table.borrow();
@@ -640,8 +637,8 @@ pub fn thread(io: Io, aux_mutex: &Mutex,
     }
     println!("End of the start section...");
 
+    #[cfg(not(has_emulator))]
     loop {
-        /*
         if listener.can_accept() {
             let mut stream = listener.accept().expect("session: cannot accept");
             stream.set_timeout(Some(2250));
@@ -681,7 +678,7 @@ pub fn thread(io: Io, aux_mutex: &Mutex,
             });
         
         }
-        */
+        
         if kernel_thread.as_ref().map_or(true, |h| h.terminated()) {
             info!("no connection, starting idle kernel");
 
