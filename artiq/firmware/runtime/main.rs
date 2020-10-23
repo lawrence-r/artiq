@@ -40,8 +40,6 @@ use board_artiq::{mailbox, rpc_queue};
 use proto_artiq::{mgmt_proto, moninj_proto, rpc_proto, session_proto, kernel_proto};
 #[cfg(has_rtio_analyzer)]
 use proto_artiq::analyzer_proto;
-#[cfg(has_rabi)]
-use riverlane::rabi; 
 
 mod rtio_clocking;
 mod rtio_mgt;
@@ -191,12 +189,10 @@ fn startup() {
 
     io.spawn(4096, mgmt::thread);
     {
-        info!("about to start session");
         let aux_mutex = aux_mutex.clone();
         let drtio_routing_table = drtio_routing_table.clone();
         let up_destinations = up_destinations.clone();
         io.spawn(16384, move |io| { session::thread(io, &aux_mutex, &drtio_routing_table, &up_destinations) });
-        info!("session completed");
     }
 
     #[cfg(any(has_rtio_moninj, has_drtio))]
@@ -212,39 +208,25 @@ fn startup() {
     io.spawn(4096, grabber_thread);
 
 
-    #[cfg(has_rabi)]
-    {
-        use core::ptr::{read_volatile, write_volatile};
-        while let Some(cmd) = rabi::get_next_cmd() {
-            info!("Riverlane: Rabi block - new command retrieved is: {:x}", cmd);
-            let retv = rabi::send_cmd_to_rtio(cmd);
-            info!("Riverlane: Rabi block - command was sent to RTIO!");
-            if (retv != 0){
-                info!("Riverlane: Rabi block - RTIO returned {:x} that indicates {}", retv, rabi::process_exceptional_status(retv));
-            }
-
-        }  
-    }
     println!("Setting up the EthernetStatics");
     let mut net_stats = ethmac::EthernetStatistics::new();
     loop {
         // This is the important call to the scheduler!
-        scheduler.run();
-
-        #[cfg(not(has_emulator))]
-        {
-            let sockets = &mut *scheduler.sockets().borrow_mut();
-            loop {
-                let timestamp = smoltcp::time::Instant::from_millis(clock::get_ms() as i64);
-                
-                match interface.poll(sockets, timestamp) {
-                    Ok(true) => (),
-                    Ok(false) => break,
-                    Err(smoltcp::Error::Unrecognized) => (),
-                    Err(err) => debug!("network error: {}", err)
+            scheduler.run();
+            #[cfg(not(has_emulator))]
+            {
+                let sockets = &mut *scheduler.sockets().borrow_mut();
+                loop {
+                    let timestamp = smoltcp::time::Instant::from_millis(clock::get_ms() as i64);
+                    
+                    match interface.poll(sockets, timestamp) {
+                        Ok(true) => (),
+                        Ok(false) => break,
+                        Err(smoltcp::Error::Unrecognized) => (),
+                        Err(err) => debug!("network error: {}", err)
+                    }
                 }
             }
-        }
 
         if let Some(_net_stats_diff) = net_stats.update() {
             debug!("ethernet mac:{}", ethmac::EthernetStatistics::new());

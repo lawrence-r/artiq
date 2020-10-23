@@ -635,7 +635,6 @@ pub fn thread(io: Io, aux_mutex: &Mutex,
             }
         })
     }
-    println!("End of the start section...");
 
     #[cfg(not(has_emulator))]
     loop {
