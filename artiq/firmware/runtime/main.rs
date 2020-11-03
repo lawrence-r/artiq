@@ -244,7 +244,11 @@ fn startup() {
 
 #[global_allocator]
 static mut ALLOC: alloc_list::ListAlloc = alloc_list::EMPTY;
+#[cfg(has_emulator)]
 static mut LOG_BUFFER: [u8; 1<<9] = [0; 1<<9];
+#[cfg(not(has_emulator))]
+static mut LOG_BUFFER: [u8; 1<<17] = [0; 1<<17];
+
 
 #[no_mangle]
 pub extern fn main() -> i32 {
