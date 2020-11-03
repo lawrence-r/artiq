@@ -410,10 +410,18 @@ extern fn dma_retrieve(name: CSlice<u8>) -> DmaTrace {
 #[cfg(has_rtio_dma)]
 #[unwind(allowed)]
 extern fn dma_playback(timestamp: i64, ptr: i32) {
+    #[cfg(has_emulator)]
     assert!(ptr % 32 == 0);
+    #[cfg(not(has_emulator))]
+    assert!(ptr % 64 == 0);
+
 
     unsafe {
+        #[cfg(has_emulator)]
         csr::rtio_dma::base_address_write(ptr as u32);
+        #[cfg(not(has_emulator))]
+        csr::rtio_dma::base_address_write(ptr as u64);
+        
         csr::rtio_dma::time_offset_write(timestamp as u64);
 
         csr::cri_con::selected_write(1);
