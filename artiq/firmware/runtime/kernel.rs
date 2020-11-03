@@ -2,8 +2,10 @@ use core::ptr;
 use board_misoc::csr;
 use mailbox;
 use rpc_queue;
-
 use kernel_proto::{KERNELCPU_EXEC_ADDRESS, KERNELCPU_LAST_ADDRESS, KSUPPORT_HEADER_SIZE};
+
+#[cfg(has_emulator)]
+use riverlane::emulator;
 
 #[cfg(has_kernel_cpu)]
 pub unsafe fn start() {
@@ -19,13 +21,24 @@ pub unsafe fn start() {
     }
     let ksupport_start = &_binary____ksupport_ksupport_elf_start as *const _;
     let ksupport_end   = &_binary____ksupport_ksupport_elf_end as *const _;
-    ptr::copy_nonoverlapping(ksupport_start,
+    
+    #[cfg(not(has_emulator))]{
+        info!("kernel:start - copy_nonoverlapping {} bytes at {:x}", 
+            ksupport_end as usize - ksupport_start as usize, KERNELCPU_EXEC_ADDRESS - KSUPPORT_HEADER_SIZE);
+        ptr::copy_nonoverlapping(ksupport_start,
                              (KERNELCPU_EXEC_ADDRESS - KSUPPORT_HEADER_SIZE) as *mut u8,
                              ksupport_end as usize - ksupport_start as usize);
-
+    }
+    #[cfg(has_emulator)]{
+        info!("kernel:start - copy_nonoverlapping (via backdoor) {} bytes at {:x}", 
+            ksupport_end as usize - ksupport_start as usize, KERNELCPU_EXEC_ADDRESS - KSUPPORT_HEADER_SIZE);
+            emulator::sdram_backdoor_copy(ksupport_start as u32, KERNELCPU_EXEC_ADDRESS as u32 - KSUPPORT_HEADER_SIZE as u32, 
+            ksupport_end as u32 - ksupport_start as u32);
+    }
     csr::kernel_cpu::reset_write(0);
-
+    info!("kernel:start - reset_write(0) - about to start rpc_queue");
     rpc_queue::init();
+    info!("rpc_queue::init() completed");
 }
 
 #[cfg(not(has_kernel_cpu))]

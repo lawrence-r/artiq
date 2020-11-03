@@ -30,7 +30,6 @@ extern crate riverlane;
 use core::cell::RefCell;
 use core::convert::TryFrom;
 use smoltcp::wire::IpCidr;
-
 use board_misoc::{csr, irq, ident, clock, boot, config, net_settings};
 #[cfg(has_ethmac)]
 use board_misoc::ethmac;
@@ -41,8 +40,6 @@ use board_artiq::{mailbox, rpc_queue};
 use proto_artiq::{mgmt_proto, moninj_proto, rpc_proto, session_proto, kernel_proto};
 #[cfg(has_rtio_analyzer)]
 use proto_artiq::analyzer_proto;
-#[cfg(has_rabi)]
-use riverlane::rabi; 
 
 mod rtio_clocking;
 mod rtio_mgt;
@@ -72,7 +69,7 @@ fn grabber_thread(io: sched::Io) {
 }
 
 fn setup_log_levels() {
-    info!("about to read_str log_level -> ");
+    println!("about to read_str log_level -> ");
     match config::read_str("log_level", |r| r.map(|s| s.parse())) {
         Ok(Ok(log_level_filter)) => {
             info!("log level set to {} by `log_level` config key",
@@ -101,6 +98,7 @@ fn startup() {
     info!("gateware ident {}", ident::read(&mut [0; 64]));
 
     setup_log_levels();
+ 
     #[cfg(has_i2c)]
     board_misoc::i2c::init().expect("I2C initialization failed");
     #[cfg(all(soc_platform = "kasli", hw_rev = "v2.0"))]
@@ -115,58 +113,63 @@ fn startup() {
     rtio_clocking::init();
 
     let mut net_device = unsafe { ethmac::EthernetDevice::new() };
-    net_device.reset_phy_if_any();
+    #[cfg(has_emulator)]
+    {
+        info!("Emulator: skipping network setup.");
+    }
+    #[cfg(not(has_emulator))]
+    {
+        net_device.reset_phy_if_any();
+        let net_device = {
+            use smoltcp::time::Instant;
+            use smoltcp::wire::PrettyPrinter;
+            use smoltcp::wire::EthernetFrame;
 
-    let net_device = {
-        use smoltcp::time::Instant;
-        use smoltcp::wire::PrettyPrinter;
-        use smoltcp::wire::EthernetFrame;
+            fn net_trace_writer(timestamp: Instant, printer: PrettyPrinter<EthernetFrame<&[u8]>>) {
+                print!("\x1b[37m[{:6}.{:03}s]\n{}\x1b[0m\n",
+                    timestamp.secs(), timestamp.millis(), printer)
+            }
 
-        fn net_trace_writer(timestamp: Instant, printer: PrettyPrinter<EthernetFrame<&[u8]>>) {
-            print!("\x1b[37m[{:6}.{:03}s]\n{}\x1b[0m\n",
-                   timestamp.secs(), timestamp.millis(), printer)
-        }
+            fn net_trace_silent(_timestamp: Instant, _printer: PrettyPrinter<EthernetFrame<&[u8]>>) {}
 
-        fn net_trace_silent(_timestamp: Instant, _printer: PrettyPrinter<EthernetFrame<&[u8]>>) {}
+            let net_trace_fn: fn(Instant, PrettyPrinter<EthernetFrame<&[u8]>>);
+            match config::read_str("net_trace", |r| r.map(|s| s == "1")) {
+                Ok(true) => net_trace_fn = net_trace_writer,
+                _ => net_trace_fn = net_trace_silent
+            }
+            smoltcp::phy::EthernetTracer::new(net_device, net_trace_fn)
+        };
 
-        let net_trace_fn: fn(Instant, PrettyPrinter<EthernetFrame<&[u8]>>);
-        match config::read_str("net_trace", |r| r.map(|s| s == "1")) {
-            Ok(true) => net_trace_fn = net_trace_writer,
-            _ => net_trace_fn = net_trace_silent
-        }
-        smoltcp::phy::EthernetTracer::new(net_device, net_trace_fn)
-    };
-
-    let neighbor_cache =
-        smoltcp::iface::NeighborCache::new(alloc::btree_map::BTreeMap::new());
-    let net_addresses = net_settings::get_adresses();
-    info!("network addresses: {}", net_addresses);
-    let mut interface = match net_addresses.ipv6_addr {
-        Some(addr) => {
-            let ip_addrs = [
-                IpCidr::new(net_addresses.ipv4_addr, 0),
-                IpCidr::new(net_addresses.ipv6_ll_addr, 0),
-                IpCidr::new(addr, 0)
-            ];
-            smoltcp::iface::EthernetInterfaceBuilder::new(net_device)
-                       .ethernet_addr(net_addresses.hardware_addr)
-                       .ip_addrs(ip_addrs)
-                       .neighbor_cache(neighbor_cache)
-                       .finalize()
-        }
-        None => {
-            let ip_addrs = [
-                IpCidr::new(net_addresses.ipv4_addr, 0),
-                IpCidr::new(net_addresses.ipv6_ll_addr, 0)
-            ];
-            smoltcp::iface::EthernetInterfaceBuilder::new(net_device)
-                       .ethernet_addr(net_addresses.hardware_addr)
-                       .ip_addrs(ip_addrs)
-                       .neighbor_cache(neighbor_cache)
-                       .finalize()
-        }
-    };
-    
+        let neighbor_cache =
+            smoltcp::iface::NeighborCache::new(alloc::btree_map::BTreeMap::new());
+        let net_addresses = net_settings::get_adresses();
+        info!("network addresses: {}", net_addresses);
+        let mut interface = match net_addresses.ipv6_addr {
+            Some(addr) => {
+                let ip_addrs = [
+                    IpCidr::new(net_addresses.ipv4_addr, 0),
+                    IpCidr::new(net_addresses.ipv6_ll_addr, 0),
+                    IpCidr::new(addr, 0)
+                ];
+                smoltcp::iface::EthernetInterfaceBuilder::new(net_device)
+                        .ethernet_addr(net_addresses.hardware_addr)
+                        .ip_addrs(ip_addrs)
+                        .neighbor_cache(neighbor_cache)
+                        .finalize()
+            }
+            None => {
+                let ip_addrs = [
+                    IpCidr::new(net_addresses.ipv4_addr, 0),
+                    IpCidr::new(net_addresses.ipv6_ll_addr, 0)
+                ];
+                smoltcp::iface::EthernetInterfaceBuilder::new(net_device)
+                        .ethernet_addr(net_addresses.hardware_addr)
+                        .ip_addrs(ip_addrs)
+                        .neighbor_cache(neighbor_cache)
+                        .finalize()
+            }
+        };
+    }
     #[cfg(has_drtio)]
     let drtio_routing_table = urc::Urc::new(RefCell::new(
         drtio_routing::config_routing_table(csr::DRTIO.len())));
@@ -190,7 +193,6 @@ fn startup() {
         let drtio_routing_table = drtio_routing_table.clone();
         let up_destinations = up_destinations.clone();
         io.spawn(16384, move |io| { session::thread(io, &aux_mutex, &drtio_routing_table, &up_destinations) });
-        print!("session completed");
     }
 
     #[cfg(any(has_rtio_moninj, has_drtio))]
@@ -204,40 +206,27 @@ fn startup() {
 
     #[cfg(has_grabber)]
     io.spawn(4096, grabber_thread);
-   
-    
-    #[cfg(has_rabi)]
-    {
-        use core::ptr::{read_volatile, write_volatile};
-        while let Some(cmd) = rabi::get_next_cmd() {
-            info!("Riverlane: Rabi block - new command retrieved is: {:x}", cmd);
-            let retv = rabi::send_cmd_to_rtio(cmd);
-            info!("Riverlane: Rabi block - command was sent to RTIO!");
-            if (retv != 0){
-                info!("Riverlane: Rabi block - RTIO returned {:x} that indicates {}", retv, rabi::process_exceptional_status(retv));
-            }
-
-        }  
-    }
 
 
-    info!("Setting up the EthernetStatics");
+    println!("Setting up the EthernetStatics");
     let mut net_stats = ethmac::EthernetStatistics::new();
     loop {
-        scheduler.run();
-
-        {
-            let sockets = &mut *scheduler.sockets().borrow_mut();
-            loop {
-                let timestamp = smoltcp::time::Instant::from_millis(clock::get_ms() as i64);
-                match interface.poll(sockets, timestamp) {
-                    Ok(true) => (),
-                    Ok(false) => break,
-                    Err(smoltcp::Error::Unrecognized) => (),
-                    Err(err) => debug!("network error: {}", err)
+        // This is the important call to the scheduler!
+            scheduler.run();
+            #[cfg(not(has_emulator))]
+            {
+                let sockets = &mut *scheduler.sockets().borrow_mut();
+                loop {
+                    let timestamp = smoltcp::time::Instant::from_millis(clock::get_ms() as i64);
+                    
+                    match interface.poll(sockets, timestamp) {
+                        Ok(true) => (),
+                        Ok(false) => break,
+                        Err(smoltcp::Error::Unrecognized) => (),
+                        Err(err) => debug!("network error: {}", err)
+                    }
                 }
             }
-        }
 
         if let Some(_net_stats_diff) = net_stats.update() {
             debug!("ethernet mac:{}", ethmac::EthernetStatistics::new());
@@ -248,12 +237,14 @@ fn startup() {
             io_expander0.service().expect("I2C I/O expander #0 service failed");
             io_expander1.service().expect("I2C I/O expander #1 service failed");
         }
+        
     }
+
 }
 
 #[global_allocator]
 static mut ALLOC: alloc_list::ListAlloc = alloc_list::EMPTY;
-static mut LOG_BUFFER: [u8; 1<<17] = [0; 1<<17];
+static mut LOG_BUFFER: [u8; 1<<9] = [0; 1<<9];
 
 #[no_mangle]
 pub extern fn main() -> i32 {

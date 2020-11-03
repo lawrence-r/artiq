@@ -64,11 +64,14 @@ mod imp {
             while csr::rtio::o_status_read() & RTIO_O_STATUS_WAIT != 0 {}
         }
         if status & RTIO_O_STATUS_UNDERFLOW != 0 {
+            println!("RTIOUnderflow at {0} mu, channel {1}, slack {2} mu", 
+                timestamp, channel as i64, timestamp - get_counter());
             raise!("RTIOUnderflow",
                 "RTIO underflow at {0} mu, channel {1}, slack {2} mu",
                 timestamp, channel as i64, timestamp - get_counter());
         }
         if status & RTIO_O_STATUS_DESTINATION_UNREACHABLE != 0 {
+            println!("RTIODestinationUnreachable");
             raise!("RTIODestinationUnreachable",
                 "RTIO destination unreachable, output, at {0} mu, channel {1}",
                 timestamp, channel as i64, 0);

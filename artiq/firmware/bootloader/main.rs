@@ -19,6 +19,7 @@ use board_misoc::slave_fpga;
 use board_misoc::{clock, ethmac, net_settings};
 use board_misoc::uart_console::Console;
 
+#[cfg(not(has_emulator))]
 fn check_integrity() -> bool {
     extern {
         static _begin: u8;
@@ -34,6 +35,12 @@ fn check_integrity() -> bool {
     }
 }
 
+#[cfg(has_emulator)]
+fn check_integrity() -> bool {
+    return true; 
+}
+
+#[cfg(not(has_emulator))] 
 fn memory_test(total: &mut usize, wrong: &mut usize) -> bool {
     const MEMORY: *mut u32 = board_mem::MAIN_RAM_BASE as *mut u32;
 
@@ -83,6 +90,11 @@ fn memory_test(total: &mut usize, wrong: &mut usize) -> bool {
             for i in (0..0x10000) { MEMORY[prng16(&mut seed)] = i });
     }
     *wrong == 0
+}
+
+#[cfg(has_emulator)]
+fn memory_test(total: &mut usize, wrong: &mut usize) -> bool {
+    return true;
 }
 
 fn startup() -> bool {
@@ -154,6 +166,7 @@ fn load_slave_fpga() {
     println!("  ...done");
 }
 
+#[cfg(not(has_emulator))]
 fn flash_boot() {
     const FIRMWARE: *mut u8 = board_mem::FLASH_BOOT_ADDRESS as *mut u8;
     const MAIN_RAM: *mut u8 = board_mem::MAIN_RAM_BASE as *mut u8;
@@ -190,6 +203,17 @@ fn flash_boot() {
     } else {
         println!("Firmware CRC failed in flash (actual {:08x}, expected {:08x})",
                  actual_crc_flash, expected_crc);
+    }
+}
+
+
+
+#[cfg(has_emulator)]
+fn flash_boot(){
+    unsafe {
+        println!("Flash boot (Emulator mode) - RAM has been preloaded with the firmware. We skip all the initialization and jump into main");
+        let MAIN_RAM_WITH_JUMP: *mut u8 =  board_misoc::csr::CONFIG_SECOND_STAGE_OFFSET as *mut u8;
+        boot::jump(MAIN_RAM_WITH_JUMP as usize)
     }
 }
 
