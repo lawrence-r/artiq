@@ -69,7 +69,6 @@ fn grabber_thread(io: sched::Io) {
 }
 
 fn setup_log_levels() {
-    println!("about to read_str log_level -> ");
     match config::read_str("log_level", |r| r.map(|s| s.parse())) {
         Ok(Ok(log_level_filter)) => {
             info!("log level set to {} by `log_level` config key",
@@ -208,7 +207,7 @@ fn startup() {
     io.spawn(4096, grabber_thread);
 
 
-    println!("Setting up the EthernetStatics");
+    info!("Setting up the EthernetStatics");
     let mut net_stats = ethmac::EthernetStatistics::new();
     loop {
         // This is the important call to the scheduler!
