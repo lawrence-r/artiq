@@ -54,8 +54,8 @@
 
     pub fn get_next_cmd() -> Option<u32> {
         unsafe {
-            csr::rabi::rabi_cntr0_write(0xffffffff);
-            let cmd = csr::rabi::rabi_cntr0_read();
+            csr::hal::hal_cntr0_write(0xffffffff);
+            let cmd = csr::hal::hal_cntr0_read();
             if cmd == 0 {
                 None
             } else {

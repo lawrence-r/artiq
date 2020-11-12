@@ -1,28 +1,27 @@
-#[cfg(has_rabi)]
+#[cfg(has_hal)]
 pub mod imp {
     use board_misoc::csr;
 
     pub extern fn read() -> u32 {
         unsafe {
-            csr::rabi::rabi_cntr0_read() as u32
+            csr::hal::hal_cntr0_read() as u32
         }
     }
     
     pub extern fn write(data: u32) {
         unsafe {
-            //csr::rtio::target_write(1 << 8);
-            csr::rabi::rabi_cntr0_write(data as u32);
+            csr::hal::hal_cntr0_write(data as u32);
         }
     }
 }
 
-#[cfg(not(has_rabi))]
+#[cfg(not(has_hal))]
 pub mod imp {
     pub extern fn write(data: u32) {
-        unimplemented!("not(has_rabi)")
+        unimplemented!("not(has_hal)")
     }
     pub extern fn read() -> u32 {
-        unimplemented!("not(has_rabi)")
+        unimplemented!("not(has_hal)")
     }
 }
 pub use self::imp::*;
