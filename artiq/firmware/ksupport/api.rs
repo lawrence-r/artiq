@@ -109,7 +109,7 @@ static mut API: &'static [(&'static str, *const ())] = &[
     
     #[cfg(has_hal)]
     api!(hal_write = ::hal::imp::write),
-    #[cfg(has_hali)]
+    #[cfg(has_hal)]
     api!(hal_read = ::hal::imp::read),
 
     #[cfg(has_rtio_dma)]

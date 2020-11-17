@@ -12,7 +12,6 @@ def hal_read() -> TInt32:
 
 
 class Hal:
-
     def __init__(self, dmgr, core_device="core"):
         self.core = dmgr.get(core_device)
 
